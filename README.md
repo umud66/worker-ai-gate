@@ -2,17 +2,31 @@
 
 独立的 Cloudflare Worker 仓库，供多个应用共用。网关负责鉴权、模型转发和用量统计。应用在调用时提供自己的业务数据、提示词和生成参数。登录后可创建和吊销 API Key，并按密钥查看推理请求数、成功次数和模型返回的输入、输出 Token。新密钥仅在创建时显示，D1 保存 SHA-256 摘要和用量。
 
-## 部署到 Cloudflare Workers Free
+## 从 GitHub 在 Cloudflare 控制台部署
 
-1. 使用 Node.js 22.13 或以上，在本目录运行 `npm install`。
-2. 运行 `npx wrangler login` 登录 Cloudflare，选择使用 Workers Free 的账号。
-3. 运行 `npm run deploy`。Wrangler 将发布 Worker，并创建 `generic-ai-gateway` D1 数据库和 `DB` 绑定。`wrangler.toml` 已配置 Workers AI 的 `AI` 绑定。
-4. 运行 `npx wrangler d1 migrations apply DB --remote` 初始化数据库。
-5. 运行 `npx wrangler secret put ADMIN_PASSWORD`，按提示输入管理员原密码。也可以在 Cloudflare 控制台的 Worker 设置中添加类型为 Secret 的 `ADMIN_PASSWORD`。
+1. 在 Cloudflare 的 **Workers & Pages** 里连接 GitHub 上的独立网关仓库。新建 Worker 选择 **Create application → GitHub**。已有 Worker 从 **Settings → Builds → Connect** 接入。
+2. 在 **Build configuration** 填写下表中的项目参数。Worker 名称须与仓库的 `wrangler.json` 中的 `name` 一致。
+3. 通过 **My Profile → API Tokens** 为此构建选用的用户令牌添加目标账户的 **D1 → Edit** 权限，同时保留 Worker 发布权限。也可以在 Build 中选择一个已具备这些权限的令牌。
+4. 在 Worker 的 **Settings → Variables and Secrets** 添加类型为 **Secret** 的 `ADMIN_PASSWORD`，填管理员原密码并保存部署。运行时 Secret 由控制台保存。仓库的 `.dev.vars*` 和 `.env*` 已加入忽略规则。
+5. 等待 **Builds** 显示成功，然后打开该 Worker 域名的根路径 `/`。输入 `ADMIN_PASSWORD` 对应的密码即可登录。
 
-打开部署域名，手动输入用户名 `admin` 和刚设置的密码。登录使用 MD5 和一次性校验流程。仓库的 `.dev.vars*` 和 `.env*` 均被忽略，Cloudflare 只通过 Secret 注入生产密码。
+| 设置项 | 值 |
+|---|---|
+| Worker name | `generic-ai-gateway` |
+| Production branch | `master`。如改用其他分支，将 Build 变量 `D1_MIGRATION_BRANCH` 设为同一分支名。 |
+| Root directory | 留空或 `/`（独立网关仓库根目录） |
+| Build command | `npm run build` |
+| Deploy command | `npm run deploy` |
 
-升级已发布的旧版网关时，部署配置应使用原有 Worker 名称和 D1 数据库绑定，以沿用原有域名、密钥和用量记录。新项目的默认名称为 `generic-ai-gateway`。
+生产构建依次运行测试、查找或首次创建 D1、通过 `DB` 应用尚未执行的远端迁移。只有构建成功才发布 Worker，发布时绑定本次迁移的数据库。预览分支和本地构建只跑测试。`wrangler.json` 已声明 Workers AI 的 `AI` 绑定。使用 Workers Free 账号可以让 Cloudflare 在免费额度耗尽后停止推理。 [Workers Builds 配置](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/) · [D1 迁移命令](https://developers.cloudflare.com/d1/wrangler-commands/#d1-migrations-apply)
+
+升级既有网关时，使用原来的 Worker 名称和 D1 绑定。构建会复用名为 `generic-ai-gateway` 的 D1。如果当前网关绑定了其他名称的 D1，在 `wrangler.json` 的 `DB` 条目填写原有的 `database_id` 和 `database_name`，以便继续使用已有的 API Key 和统计数据。
+
+如果构建日志提示 Wrangler 缺少凭据，在 **Settings → Builds → Build variables and secrets** 添加 `CLOUDFLARE_API_TOKEN`（Secret，须有目标账户的 D1 Edit 权限）和 `CLOUDFLARE_ACCOUNT_ID`（账户 ID）。
+
+## 页面显示 Hello World
+
+在目标 Worker 的 **Builds** 查看最新生产构建。确认它来自网关仓库、状态为成功，再打开该 Worker 在 **Overview** 中显示的域名。Worker 名称不一致时，Cloudflare 会在构建日志里显示错误。成功发布后，缺少 `ADMIN_PASSWORD` 时首页会提示设置 Secret。 [Workers Builds 排查](https://developers.cloudflare.com/workers/ci-cd/builds/troubleshoot/) · [控制台设置 Secret](https://developers.cloudflare.com/workers/configuration/secrets/#via-the-dashboard)
 
 ## 接口
 

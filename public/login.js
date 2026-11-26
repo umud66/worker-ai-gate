@@ -27,7 +27,7 @@ loginForm.addEventListener('submit', async (event) => {
     loginPassword.value = '';
     const { challenge } = await authRequest('challenge', {});
     const proof = CryptoJS.HmacSHA256(`stockwatch-login:${challenge}`, key).toString();
-    await authRequest('login', { username: document.getElementById('login-user').value, challenge, proof });
+    await authRequest('login', { challenge, proof });
     window.location.reload();
   } catch (error) {
     loginMessage.textContent = error.message;

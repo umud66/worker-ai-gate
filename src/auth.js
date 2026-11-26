@@ -49,13 +49,13 @@ export async function login(request, env) {
   }
   const consumed = await env.DB.prepare('DELETE FROM auth_nonces WHERE nonce=? RETURNING expires').bind(input.challenge).first();
   if (!consumed || consumed.expires <= timeSeconds()) throw new HTTPError(401, '登录校验已过期，请重新登录');
-  if (input.username !== 'admin' || typeof input.proof !== 'string' || !/^[0-9a-f]{64}$/.test(input.proof)) {
-    throw new HTTPError(401, '账号或密码错误');
+  if (typeof input.proof !== 'string' || !/^[0-9a-f]{64}$/.test(input.proof)) {
+    throw new HTTPError(401, '密码错误');
   }
   const key = createHash('md5').update(env.ADMIN_PASSWORD, 'utf8').digest();
   const expected = createHmac('sha256', key).update(`stockwatch-login:${input.challenge}`).digest();
   const supplied = Buffer.from(input.proof, 'hex');
-  if (!timingSafeEqual(expected, supplied)) throw new HTTPError(401, '账号或密码错误');
+  if (!timingSafeEqual(expected, supplied)) throw new HTTPError(401, '密码错误');
 
   const token = randomHex(32);
   const now = timeSeconds();

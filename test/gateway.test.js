@@ -54,7 +54,7 @@ async function loginAsAdmin(env) {
   const { challenge } = await response.json();
   const key = createHash('md5').update(password).digest();
   const proof = createHmac('sha256', key).update(`stockwatch-login:${challenge}`).digest('hex');
-  const input = { username: 'admin', challenge, proof };
+  const input = { challenge, proof };
   const confirmed = await request(env, '/api/auth/login', 'POST', input);
   assert.equal(confirmed.status, 204);
   assert.equal((await request(env, '/api/auth/login', 'POST', input)).status, 401);
