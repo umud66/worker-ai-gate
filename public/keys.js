@@ -8,6 +8,17 @@ function status(text, error = false) {
   get('status').classList.toggle('error', error);
 }
 
+async function copyValue(input, label) {
+  try {
+    await navigator.clipboard.writeText(input.value);
+    status(`已复制 ${label}。`);
+  } catch {
+    input.focus();
+    input.select();
+    status(`请手动复制选中的 ${label}。`);
+  }
+}
+
 async function api(path, method = 'GET', input) {
   const response = await fetch(path, {
     method, cache: 'no-store',
@@ -85,15 +96,10 @@ get('create-form').addEventListener('submit', (event) => {
     get('reveal-value').select();
   });
 });
-get('copy').addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(get('reveal-value').value);
-    status('已复制 API Key。');
-  } catch {
-    get('reveal-value').select();
-    status('请手动复制选中的 API Key。');
-  }
-});
+const apiBaseURL = get('api-base-url');
+apiBaseURL.value = new URL('/v1', window.location.origin).href;
+get('copy-api-base-url').addEventListener('click', () => copyValue(apiBaseURL, 'API 地址'));
+get('copy').addEventListener('click', () => copyValue(get('reveal-value'), 'API Key'));
 get('hide-key').addEventListener('click', () => {
   get('reveal-value').value = '';
   get('key-reveal').hidden = true;

@@ -9,6 +9,13 @@
   <header><span>AI 网关</span><button class="quiet" type="button" id="logout">退出</button></header>
   <main>
     <div class="page-heading"><h1>API Key 管理</h1><p id="status" role="status" hidden></p></div>
+    <section class="panel" aria-labelledby="api-base-url-title">
+      <h2 id="api-base-url-title"><label for="api-base-url">API 地址（Base URL）</label></h2>
+      <div class="inline">
+        <input id="api-base-url" readonly>
+        <button class="quiet" id="copy-api-base-url" type="button">复制地址</button>
+      </div>
+    </section>
     <section class="panel" aria-labelledby="create-title">
       <h2 id="create-title">创建 API Key</h2>
       <form id="create-form">

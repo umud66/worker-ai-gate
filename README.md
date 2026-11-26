@@ -36,7 +36,7 @@
 
 ## 接口
 
-请求头使用 `Authorization: Bearer <创建的 API Key>`。任意兼容客户端均可使用 `https://你的-Worker-域名/v1` 作为 Base URL。
+请求头使用 `Authorization: Bearer <创建的 API Key>`。登录管理页后，可复制根据当前访问地址生成的 API Base URL，例如 `https://你的-Worker-域名/v1`。
 
 | 方法 | 路径 | 功能 |
 |---|---|---|

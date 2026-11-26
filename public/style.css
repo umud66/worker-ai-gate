@@ -25,7 +25,7 @@ button.quiet:hover:not(:disabled) { background: #e9f3e9; color: #172821; }
 .inline { display: flex; gap: 7px; }
 #key-reveal { margin-top: 12px; padding: 10px; border-radius: 6px; background: #e9f3e9; }
 #key-reveal label { display: block; margin-bottom: 7px; }
-#reveal-value { font-family: monospace; }
+#api-base-url, #reveal-value { font-family: monospace; }
 #status, #empty, .meta { color: var(--muted); }
 .error, #status.error { color: #9a352a; }
 .table-wrap { overflow-x: auto; }
