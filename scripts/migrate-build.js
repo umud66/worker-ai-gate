@@ -39,4 +39,6 @@ if (!database.database_id) {
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 }
 
+console.log(`Applying D1 migrations for ${database.binding} (${database.database_name}, ${database.database_id}).`);
 execFileSync('wrangler', ['d1', 'migrations', 'apply', database.binding, '--remote'], { stdio: 'inherit' });
+console.log(`D1 migrations complete for ${database.binding}.`);

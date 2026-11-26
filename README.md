@@ -28,6 +28,12 @@
 
 在目标 Worker 的 **Builds** 查看最新生产构建。确认它来自网关仓库、状态为成功，再打开该 Worker 在 **Overview** 中显示的域名。Worker 名称不一致时，Cloudflare 会在构建日志里显示错误。成功发布后，缺少 `ADMIN_PASSWORD` 时首页会提示设置 Secret。 [Workers Builds 排查](https://developers.cloudflare.com/workers/ci-cd/builds/troubleshoot/) · [控制台设置 Secret](https://developers.cloudflare.com/workers/configuration/secrets/#via-the-dashboard)
 
+## D1 已绑定但无法登录
+
+在 **Settings → Builds → Build configuration** 将 **Build command** 改为 `npm run build`。`npx wrangle build` 或 `npx wrangler build` 都会跳过本仓库的迁移脚本。保存后重试生产构建，并在 **Builds** 的日志中确认出现 `D1 migrations complete for DB.`。改动前已经发布的版本需要重新构建，才能生成登录所需的数据表。 [Workers Builds 配置](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)
+
+如果迁移已成功但仍无法登录，核对构建日志中的 D1 ID 是否等于线上 Worker 的 `DB` 绑定 ID。其他运行错误可在 **Logs → Live logs** 中查看，打开日志后再提交一次登录。 [Worker 实时日志](https://developers.cloudflare.com/workers/observability/logs/real-time-logs/)
+
 ## 接口
 
 请求头使用 `Authorization: Bearer <创建的 API Key>`。任意兼容客户端均可使用 `https://你的-Worker-域名/v1` 作为 Base URL。

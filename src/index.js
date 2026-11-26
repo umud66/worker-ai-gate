@@ -142,8 +142,15 @@ export default {
     try {
       return secureResponse(await handle(request, env));
     } catch (error) {
-      const known = error instanceof HTTPError;
-      return secureResponse(json({ error: { message: known ? error.message : '网关暂不可用，请检查绑定和 D1 迁移' } }, known ? error.status : 500));
+      if (error instanceof HTTPError) {
+        return secureResponse(json({ error: { message: error.message } }, error.status));
+      }
+      const missingTable = /no such table:\s*(?:main\.)?(?:auth_nonces|admin_sessions|api_keys)\b/i;
+      if (missingTable.test(error?.message) || missingTable.test(error?.cause?.message)) {
+        return secureResponse(json({ error: { message: 'DB 已绑定，但缺少网关数据表。请将 Cloudflare Build command 设为 npm run build 后重新构建。' } }, 503));
+      }
+      console.error('Gateway request failed', request.method, new URL(request.url).pathname, error);
+      return secureResponse(json({ error: { message: '网关暂不可用，请查看 Cloudflare Worker 实时日志' } }, 500));
     }
   },
 };

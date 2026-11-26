@@ -5,9 +5,9 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import gateway from '../src/index.js';
 
-function sqliteBinding() {
+function sqliteBinding(migrated = true) {
   const db = new DatabaseSync(':memory:');
-  db.exec(readFileSync(new URL('../migrations/0001_gateway.sql', import.meta.url), 'utf8'));
+  if (migrated) db.exec(readFileSync(new URL('../migrations/0001_gateway.sql', import.meta.url), 'utf8'));
   return {
     prepare(sql) {
       const statement = db.prepare(sql);
@@ -62,6 +62,22 @@ async function loginAsAdmin(env) {
   assert.match(cookie, /HttpOnly; SameSite=Strict; Secure/);
   return { Cookie: cookie.split(';')[0] };
 }
+
+test('login identifies missing D1 binding and an unmigrated database', async () => {
+  const env = { ADMIN_PASSWORD: password };
+  const unbound = await request(env, '/api/auth/challenge', 'POST', {});
+  assert.equal(unbound.status, 503);
+  assert.match((await unbound.json()).error.message, /绑定为 DB/);
+
+  const DB = sqliteBinding(false);
+  try {
+    const unmigrated = await request({ ...env, DB }, '/api/auth/challenge', 'POST', {});
+    assert.equal(unmigrated.status, 503);
+    assert.match((await unmigrated.json()).error.message, /缺少网关数据表.*npm run build/);
+  } finally {
+    DB.db.close();
+  }
+});
 
 test('keys are created, used only for allowed models, counted, then immediately revoked', async () => {
   const called = [];

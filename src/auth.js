@@ -9,6 +9,13 @@ export const randomHex = (size) => randomBytes(size).toString('hex');
 const timeSeconds = () => Math.floor(Date.now() / 1000);
 const passwordTag = (env, token) => createHmac('sha256', env.ADMIN_PASSWORD).update(`stockwatch-worker-session:${token}`).digest('hex');
 
+function authDatabase(env) {
+  if (typeof env.DB?.prepare !== 'function' || typeof env.DB?.batch !== 'function') {
+    throw new HTTPError(503, '请在当前 Worker 中将 D1 数据库绑定为 DB');
+  }
+  return env.DB;
+}
+
 function sessionToken(request) {
   for (const pair of (request.headers.get('cookie') || '').split(';')) {
     const [name, value] = pair.trim().split('=');
@@ -26,17 +33,18 @@ function sessionResponse(request, value, maxAge) {
 export async function authorized(request, env) {
   const token = sessionToken(request);
   if (!token) return false;
-  const row = await env.DB.prepare('SELECT digest FROM admin_sessions WHERE digest=? AND password_tag=? AND expires>?')
+  const row = await authDatabase(env).prepare('SELECT digest FROM admin_sessions WHERE digest=? AND password_tag=? AND expires>?')
     .bind(digest(token), passwordTag(env, token), timeSeconds()).first();
   return Boolean(row);
 }
 
 export async function challenge(env) {
+  const db = authDatabase(env);
   const nonce = randomHex(16);
   const now = timeSeconds();
-  const [, inserted] = await env.DB.batch([
-    env.DB.prepare('DELETE FROM auth_nonces WHERE expires<=?').bind(now),
-    env.DB.prepare('INSERT INTO auth_nonces(nonce, expires) SELECT ?, ? WHERE (SELECT count(*) FROM auth_nonces)<256').bind(nonce, now + 60),
+  const [, inserted] = await db.batch([
+    db.prepare('DELETE FROM auth_nonces WHERE expires<=?').bind(now),
+    db.prepare('INSERT INTO auth_nonces(nonce, expires) SELECT ?, ? WHERE (SELECT count(*) FROM auth_nonces)<256').bind(nonce, now + 60),
   ]);
   if (!inserted.meta.changes) throw new HTTPError(429, '登录请求较多，请稍后重试');
   return json({ challenge: nonce });
@@ -47,7 +55,8 @@ export async function login(request, env) {
   if (!input || typeof input.challenge !== 'string' || !/^[0-9a-f]{32}$/.test(input.challenge)) {
     throw new HTTPError(400, '登录请求格式无效');
   }
-  const consumed = await env.DB.prepare('DELETE FROM auth_nonces WHERE nonce=? RETURNING expires').bind(input.challenge).first();
+  const db = authDatabase(env);
+  const consumed = await db.prepare('DELETE FROM auth_nonces WHERE nonce=? RETURNING expires').bind(input.challenge).first();
   if (!consumed || consumed.expires <= timeSeconds()) throw new HTTPError(401, '登录校验已过期，请重新登录');
   if (typeof input.proof !== 'string' || !/^[0-9a-f]{64}$/.test(input.proof)) {
     throw new HTTPError(401, '密码错误');
@@ -59,9 +68,9 @@ export async function login(request, env) {
 
   const token = randomHex(32);
   const now = timeSeconds();
-  await env.DB.batch([
-    env.DB.prepare('DELETE FROM admin_sessions WHERE expires<=? OR digest=?').bind(now, digest(sessionToken(request))),
-    env.DB.prepare('INSERT INTO admin_sessions(digest,password_tag,expires) VALUES(?,?,?)').bind(digest(token), passwordTag(env, token), now + sessionSeconds),
+  await db.batch([
+    db.prepare('DELETE FROM admin_sessions WHERE expires<=? OR digest=?').bind(now, digest(sessionToken(request))),
+    db.prepare('INSERT INTO admin_sessions(digest,password_tag,expires) VALUES(?,?,?)').bind(digest(token), passwordTag(env, token), now + sessionSeconds),
   ]);
   return sessionResponse(request, token, sessionSeconds);
 }
