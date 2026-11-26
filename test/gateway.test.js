@@ -133,3 +133,59 @@ test('keys are created, used only for allowed models, counted, then immediately 
   assert.equal((await request(env, '/api/auth/logout', 'POST', {}, headers)).status, 204);
   assert.equal((await request(env, '/api/keys', 'GET', undefined, headers)).status, 401);
 });
+
+test('streaming forwards text before completion and records only completed responses', { timeout: 5000 }, async (t) => {
+  const DB = sqliteBinding();
+  t.after(() => DB.db.close());
+  let upstream;
+  const env = {
+    DB, ADMIN_PASSWORD: password,
+    AI: { run: async (_model, options) => {
+      assert.equal(options.stream, true);
+      assert.equal(options.stream_options.include_usage, true);
+      return new ReadableStream({ start(controller) { upstream = controller; } });
+    } },
+  };
+  const headers = await loginAsAdmin(env);
+  const created = await request(env, '/api/keys', 'POST', { name: '流式测试' }, headers);
+  const { key } = await created.json();
+  const bearer = { Authorization: `Bearer ${key}` };
+  const body = {
+    model: supported, messages: [{ role: 'user', content: '测试流式' }],
+    stream: true, stream_options: { include_usage: true },
+  };
+  const response = await request(env, '/v1/chat/completions', 'POST', body, bearer);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('Content-Type'), /^text\/event-stream/);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const first = encoder.encode('data: {"response":"首段"}\r\n\r\n');
+  upstream.enqueue(first.slice(0, 21));
+  upstream.enqueue(first.slice(21));
+  const event = JSON.parse(decoder.decode((await reader.read()).value).slice(6));
+  assert.equal(event.object, 'chat.completion.chunk');
+  assert.equal(event.choices[0].delta.content, '首段');
+  const counts = DB.db.prepare('SELECT requests, successes, input_tokens, output_tokens FROM api_keys');
+  assert.equal(counts.get().successes, 0);
+  upstream.enqueue(encoder.encode('data: {"choices":[{"index":0,"delta":{"content":"后段"},"finish_reason":"stop"}]}\n\ndata: {"choices":[],"usage":{"prompt_tokens":5,"completion_tokens":7}}\n\ndata: [DONE]\n\n'));
+  upstream.close();
+  let output = '';
+  for (let next; !(next = await reader.read()).done;) output += decoder.decode(next.value);
+  assert.match(output, /后段/);
+  assert.match(output, /"completion_tokens":7/);
+  assert.match(output, /data: \[DONE\]\n\n$/);
+  assert.deepEqual({ ...counts.get() }, { requests: 1, successes: 1, input_tokens: 5, output_tokens: 7 });
+
+  const interrupted = await request(env, '/v1/chat/completions', 'POST', body, bearer);
+  upstream.enqueue(encoder.encode('data: {"response":"未完成"}\n\n'));
+  upstream.close();
+  assert.doesNotMatch(await interrupted.text(), /\[DONE\]/);
+  assert.equal(counts.get().successes, 1);
+
+  env.AI.run = async () => new Response(null, { status: 524 });
+  const timeout = await request(env, '/v1/chat/completions', 'POST', body, bearer);
+  assert.equal(timeout.status, 504);
+  assert.match((await timeout.json()).error.message, /推理超时/);
+  assert.deepEqual({ ...counts.get() }, { requests: 3, successes: 1, input_tokens: 5, output_tokens: 7 });
+});

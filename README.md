@@ -41,9 +41,9 @@
 | 方法 | 路径 | 功能 |
 |---|---|---|
 | `GET` | `/v1/models` | 返回此网关开放的 Workers Free 文本模型 |
-| `POST` | `/v1/chat/completions` | 兼容 OpenAI 格式的非流式文本推理 |
+| `POST` | `/v1/chat/completions` | 兼容 OpenAI 格式的文本推理，支持流式和非流式 |
 
-文本请求使用 `model`、`messages`，可选 `temperature` 和 `max_tokens`（或 `max_completion_tokens`），输出限制为最多 800 Token。
+文本请求使用 `model`、`messages`，可选 `temperature` 和 `max_tokens`（或 `max_completion_tokens`），输出限制为最多 800 Token。设置 `stream: true` 可逐段接收 SSE `chat.completion.chunk`，完整流以 `[DONE]` 结束。设置 `stream_options.include_usage: true` 时，如果上游返回用量，网关会在结束前发送用量事件。
 
 查询可用模型的例子，`AI_BASE_URL` 为以 `/v1` 结尾的地址。
 

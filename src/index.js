@@ -1,5 +1,6 @@
 import { authorized, challenge, digest, login, logout, randomHex } from './auth.js';
 import { HTTPError, json, readJSON, secureResponse } from './http.js';
+import { streamCompletion } from './stream.js';
 
 // Cloudflare lists both models as available on Workers Free.
 const models = new Map([
@@ -38,11 +39,25 @@ function tokenCount(value) {
   return Number.isSafeInteger(value) && value > 0 ? value : 0;
 }
 
-async function complete(request, env, id) {
+function usageCounts(usage) {
+  return {
+    prompt_tokens: tokenCount(usage?.prompt_tokens ?? usage?.input_tokens),
+    completion_tokens: tokenCount(usage?.completion_tokens ?? usage?.output_tokens),
+  };
+}
+
+async function recordSuccess(env, id, usage) {
+  const { prompt_tokens, completion_tokens } = usageCounts(usage);
+  return env.DB.prepare('UPDATE api_keys SET successes=successes+1,input_tokens=input_tokens+?,output_tokens=output_tokens+? WHERE id=?')
+    .bind(prompt_tokens, completion_tokens, id).run();
+}
+
+async function complete(request, env, ctx, id) {
   const input = await readJSON(request, 32 * 1024);
   if (!models.has(input?.model)) throw new HTTPError(400, '请选择模型列表中的 Workers Free 模型');
-  if (input.stream || !Array.isArray(input.messages) || !input.messages.length || input.messages.length > 20) {
-    throw new HTTPError(400, '请提交非流式文本消息');
+  if (input.stream != null && typeof input.stream !== 'boolean') throw new HTTPError(400, 'stream 须为布尔值');
+  if (!Array.isArray(input.messages) || !input.messages.length || input.messages.length > 20) {
+    throw new HTTPError(400, '请提交 1 至 20 条文本消息');
   }
   const roles = new Set(['system', 'user', 'assistant']);
   const messages = input.messages.map((message) => {
@@ -57,7 +72,8 @@ async function complete(request, env, id) {
     throw new HTTPError(400, '输出 Token 上限须为正整数');
   }
   const maxTokens = Math.min(800, requestedTokens ?? 650);
-  const options = { messages, max_tokens: maxTokens, stream: false };
+  const options = { messages, max_tokens: maxTokens, stream: input.stream === true };
+  if (options.stream) options.stream_options = { include_usage: true };
   if (input.temperature != null) {
     if (!Number.isFinite(input.temperature) || input.temperature < 0 || input.temperature > 2) {
       throw new HTTPError(400, 'temperature 须为 0 至 2 之间的数字');
@@ -69,35 +85,45 @@ async function complete(request, env, id) {
   let completion;
   try {
     completion = await env.AI.run(input.model, options);
-    if (completion instanceof Response) {
-      if (!completion.ok) throw new HTTPError(completion.status, '推理请求失败');
-      completion = await completion.json();
-    }
+    if (completion instanceof Response && !completion.ok) throw new HTTPError(completion.status, '推理请求失败');
+    if (!options.stream && completion instanceof Response) completion = await completion.json();
   } catch (error) {
     const status = Number(error?.status || error?.statusCode || 0);
     const code = Number(error?.code || 0);
     if (status === 429 || code === 3040 || /quota|neurons|rate limit|allocation|capacity/i.test(error?.message || '')) {
       throw new HTTPError(429, 'Workers AI 免费额度或容量暂不可用');
     }
-    throw new HTTPError(502, 'Workers AI 推理暂不可用，请检查模型或 Cloudflare 配额');
+    if ([408, 504, 524].includes(status) || /timed?\s*out|deadline exceeded|ETIMEDOUT/i.test(error?.message || '')) {
+      throw new HTTPError(504, 'Workers AI 推理超时');
+    }
+    console.error('Workers AI inference failed', { model: input.model, status, code });
+    throw new HTTPError(502, 'Workers AI 推理暂不可用');
+  }
+  const metadata = { id: `chatcmpl-${randomHex(12)}`, created: Math.floor(Date.now() / 1000), model: input.model };
+  if (options.stream) {
+    const source = completion instanceof Response ? completion.body : completion;
+    if (!(source instanceof ReadableStream)) throw new HTTPError(502, 'Workers AI 未返回流式响应');
+    return streamCompletion(source, metadata, input.stream_options?.include_usage === true, async (usage) => {
+      const task = recordSuccess(env, id, usage).catch(() => console.error('Unable to record streamed AI usage'));
+      if (ctx) ctx.waitUntil(task);
+      else await task;
+    });
   }
   const result = completion?.result || completion;
   const choice = result?.choices?.[0];
   const content = choice?.message?.content || result?.response;
   if (typeof content !== 'string' || !content.trim()) throw new HTTPError(502, '模型未返回文本');
 
-  const promptTokens = tokenCount(result?.usage?.prompt_tokens || result?.usage?.input_tokens);
-  const completionTokens = tokenCount(result?.usage?.completion_tokens || result?.usage?.output_tokens);
-  await env.DB.prepare('UPDATE api_keys SET successes=successes+1,input_tokens=input_tokens+?,output_tokens=output_tokens+? WHERE id=?')
-    .bind(promptTokens, completionTokens, id).run();
+  const usage = usageCounts(result?.usage);
+  await recordSuccess(env, id, usage);
   return json({
-    id: `chatcmpl-${randomHex(12)}`, object: 'chat.completion', created: Math.floor(Date.now() / 1000), model: input.model,
+    ...metadata, object: 'chat.completion',
     choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: choice?.finish_reason || 'stop' }],
-    usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens },
+    usage: { ...usage, total_tokens: usage.prompt_tokens + usage.completion_tokens },
   });
 }
 
-async function handle(request, env) {
+async function handle(request, env, ctx) {
   const { pathname } = new URL(request.url);
   const method = request.method;
   if (method === 'GET' && scripts.has(pathname)) return asset(env, request, pathname);
@@ -106,7 +132,7 @@ async function handle(request, env) {
       await requireKey(request, env);
       return json({ object: 'list', data: [...models].map(([id, owned_by]) => ({ id, object: 'model', owned_by })) });
     }
-    if (method === 'POST' && pathname === '/v1/chat/completions') return complete(request, env, await requireKey(request, env));
+    if (method === 'POST' && pathname === '/v1/chat/completions') return complete(request, env, ctx, await requireKey(request, env));
     throw new HTTPError(404, '找不到 API');
   }
   if (!env.ADMIN_PASSWORD) throw new HTTPError(503, '请在 Worker 中设置 ADMIN_PASSWORD 密钥');
@@ -138,9 +164,9 @@ async function handle(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     try {
-      return secureResponse(await handle(request, env));
+      return secureResponse(await handle(request, env, ctx));
     } catch (error) {
       if (error instanceof HTTPError) {
         return secureResponse(json({ error: { message: error.message } }, error.status));
