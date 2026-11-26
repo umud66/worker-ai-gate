@@ -1,0 +1,39 @@
+:root { font: 15px/1.5 system-ui, sans-serif; color: #172821; background: #f4f6f2; --line: #dbe3dc; --accent: #19563e; --muted: #4c6056; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+header { min-height: 60px; padding: 8px max(16px, calc((100vw - 880px) / 2)); display: flex; gap: 10px; align-items: center; justify-content: space-between; background: #162b22; color: white; font-weight: 650; }
+header .quiet { color: white; }
+main { max-width: 920px; margin: auto; padding: 26px 16px; }
+main.login { max-width: 410px; padding-top: 45px; }
+h1, h2, p { margin: 0; }
+h1 { font-size: 1.65rem; }
+h2 { font-size: 1.1rem; margin-bottom: 12px; }
+.login h1, .page-heading { margin-bottom: 15px; }
+.panel { background: white; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+form { display: grid; gap: 7px; }
+.login input { margin-bottom: 5px; }
+label { font-weight: 600; }
+input, button { min-height: 42px; border-radius: 6px; font: inherit; padding: 6px 10px; }
+input { width: 100%; min-width: 0; border: 1px solid #a4b5a8; }
+button { white-space: nowrap; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: white; }
+button:hover:not(:disabled) { background: #104330; }
+button:disabled { opacity: .6; cursor: wait; }
+button.quiet { color: var(--accent); background: transparent; border-color: transparent; }
+button.quiet:hover:not(:disabled) { background: #e9f3e9; color: #172821; }
+:focus-visible { outline: 2px solid #2a7d57; outline-offset: 2px; }
+.inline { display: flex; gap: 7px; }
+#key-reveal { margin-top: 12px; padding: 10px; border-radius: 6px; background: #e9f3e9; }
+#key-reveal label { display: block; margin-bottom: 7px; }
+#reveal-value { font-family: monospace; }
+#status, #empty, .meta { color: var(--muted); }
+.error, #status.error { color: #9a352a; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { padding: 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; max-width: 270px; white-space: normal; overflow-wrap: anywhere; }
+th { color: var(--muted); }
+.meta { display: block; font-size: .86rem; }
+@media(max-width: 520px) { .inline { flex-wrap: wrap; } }
+.list-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.list-heading h2 { margin: 0; }

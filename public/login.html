@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登录 · AI 网关</title><link rel="stylesheet" href="/style.css">
+  <script src="/login-crypto.js" defer></script><script src="/login.js" defer></script>
+</head>
+<body>
+  <header>AI 网关</header>
+  <main class="login">
+    <section class="panel" aria-labelledby="login-title">
+      <h1 id="login-title">管理员登录</h1>
+      <form id="login-form" method="post">
+        <label for="login-user">账号</label><input id="login-user" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+        <label for="login-password">密码</label><input id="login-password" type="password" autocomplete="current-password" required>
+        <button id="login-button" type="submit" disabled>登录</button>
+        <p class="error" id="login-message" role="alert" hidden></p>
+        <noscript>请启用 JavaScript 后登录。</noscript>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

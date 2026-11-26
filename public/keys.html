@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API Key · AI 网关</title><link rel="stylesheet" href="/style.css">
+  <script src="/keys.js" defer></script>
+</head>
+<body>
+  <header><span>AI 网关</span><button class="quiet" type="button" id="logout">退出</button></header>
+  <main>
+    <div class="page-heading"><h1>API Key 管理</h1><p id="status" role="status" hidden></p></div>
+    <section class="panel" aria-labelledby="create-title">
+      <h2 id="create-title">创建 API Key</h2>
+      <form id="create-form">
+        <label for="key-name">名称</label>
+        <div class="inline"><input id="key-name" maxlength="60" placeholder="例如 文档摘要服务" required><button type="submit" id="create">创建</button></div>
+      </form>
+      <div id="key-reveal" hidden>
+        <label for="reveal-value">立即复制 API Key。此密钥只显示一次。</label>
+        <div class="inline"><input id="reveal-value" readonly><button class="quiet" id="copy" type="button">复制</button><button class="quiet" id="hide-key" type="button">关闭</button></div>
+      </div>
+    </section>
+    <section class="panel" aria-labelledby="list-title">
+      <div class="list-heading"><h2 id="list-title">密钥与用量</h2><button class="quiet" id="refresh-keys" type="button">刷新用量</button></div>
+      <p id="empty">正在读取密钥…</p>
+      <div id="key-table" class="table-wrap" hidden>
+        <table><thead><tr><th scope="col">名称</th><th scope="col">请求</th><th scope="col">成功</th><th scope="col">输入 Token</th><th scope="col">输出 Token</th><th scope="col">操作</th></tr></thead><tbody id="keys"></tbody></table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
